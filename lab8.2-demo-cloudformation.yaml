@@ -1,0 +1,582 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "ACD_2.0"
+Parameters:
+
+  VpcCIDR:
+    Default: 10.16.0.0/16
+    Description: "The CIDR block for the VPC"
+    Type: String
+    AllowedValues:
+      - 10.16.0.0/16
+
+  SubnetCIDR:
+    Default: 10.16.10.0/24
+    Description: "CIDR for public subnet"
+    Type: String
+    AllowedValues:
+      - 10.16.10.0/24
+
+  LabUserId:
+    Default: arn:aws:sts:012345678-assumed-role/vocareum-role/username
+    Description: "session user ARN"
+    Type: String
+
+  KeyName:
+    Description: Amazon EC2 Key Pair
+    Type: "AWS::EC2::KeyPair::KeyName"
+
+Resources:
+
+  myDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        -
+          AttributeName: "product_name"
+          AttributeType: "S"
+        -
+          AttributeName: "special"
+          AttributeType: "N"
+      KeySchema:
+        -
+          AttributeName: "product_name"
+          KeyType: "HASH"
+      ProvisionedThroughput:
+        ReadCapacityUnits: "1"
+        WriteCapacityUnits: "1"
+      TableName: "FoodProducts"
+      GlobalSecondaryIndexes:
+        -
+          IndexName: "special_GSI"
+          KeySchema:
+            -
+              AttributeName: "special"
+              KeyType: "HASH"
+          Projection:
+            ProjectionType: "ALL"
+          ProvisionedThroughput:
+            ReadCapacityUnits: "1"
+            WriteCapacityUnits: "1"
+
+  ApiGatewayMethodPOST:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      # AuthorizationType: COGNITO_USER_POOLS
+      # AuthorizerId: !Ref ApiGatewayAuth
+      HttpMethod: POST
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              #method.response.header.Access-Control-Allow-Credentials: "'true'"
+            ResponseTemplates:
+              application/json: |
+                                {
+                                "message_str": "report requested, check your phone shortly."
+                                }
+            StatusCode: '200'
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      ResourceId: !Ref ApiGatewayResource3
+      RestApiId: !Ref ApiGatewayRestApi
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+            #method.response.header.Access-Control-Allow-Credentials: true
+          ResponseModels:
+            application/json: Empty
+
+  ApiGatewayMethodOPTIONS:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      ResourceId: !Ref ApiGatewayResource3
+      RestApiId: !Ref ApiGatewayRestApi
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: !Sub "'https://${S3Bucket}.s3-${AWS::Region}.amazonaws.com'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+            ResponseTemplates:
+              application/json: ''
+            StatusCode: '200'
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - ResponseModels:
+            application/json: Empty
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Credentials: true
+          StatusCode: '200'
+
+  ApiGatewayMethodGET:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      Integration:
+        Type: AWS
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaProducts.Arn}/invocations
+        Credentials: !GetAtt LambdaRole.Arn
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseTemplates:
+              application/json: ''
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      ResourceId: !Ref ApiGatewayResource1
+      RestApiId: !Ref ApiGatewayRestApi
+      RequestParameters:
+            method.request.querystring.product_id: false
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          ResponseModels:
+            application/json: Empty
+
+  ApiGatewayMethodGET2:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      Integration:
+        Type: AWS
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaProducts.Arn}/invocations
+        Credentials: !GetAtt LambdaRole.Arn
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseTemplates:
+              application/json: ''
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json:  |
+            {
+              "path": "$context.resourcePath"
+            }
+      ResourceId: !Ref ApiGatewayResource2
+      RestApiId: !Ref ApiGatewayRestApi
+      RequestParameters:
+            method.request.querystring.product_id: false
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          ResponseModels:
+            application/json: Empty
+
+  ApiGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      DeploymentId: !Ref ApiGatewayDeployment
+      RestApiId: !Ref ApiGatewayRestApi
+      StageName: 'prod'
+
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ApiGatewayMethodOPTIONS
+      - ApiGatewayMethodGET
+      - ApiGatewayMethodGET2
+    Properties:
+      Description: Mock API Deployment
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      ApiKeySourceType: HEADER
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Name: "ProductsApi"
+
+  ApiGatewayResource1:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: 'products'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayResource2:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref ApiGatewayResource1
+      PathPart: 'on_offer'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayResource3:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: 'create_report'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        IgnorePublicAcls: false
+        BlockPublicPolicy: false
+        RestrictPublicBuckets: false
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Statement:
+          Action:
+            - s3:GetObject
+          Effect: Allow
+          Principal: "*"
+          Resource:
+            - !Sub "arn:aws:s3:::${S3Bucket}/*"
+            - !Sub "arn:aws:s3:::${S3Bucket}"
+          Condition:
+            IpAddress:
+              aws:SourceIp:
+                - 0.0.0.0/32
+
+  VPC:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+       - Key: Name
+         Value: "Cloud9 VPC"
+
+  subnet:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+     VpcId: !Ref VPC
+     AvailabilityZone:
+      Fn::Select:
+      - 0
+      - Fn::GetAZs: ''
+     CidrBlock: !Ref SubnetCIDR
+     MapPublicIpOnLaunch: true
+     Tags:
+      - Key: Name
+        Value: "Cloud9 subnet"
+
+  IGW:
+    Type: "AWS::EC2::InternetGateway"
+    DependsOn: VPC
+  AttachGateway:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    DependsOn:
+      - VPC
+      - IGW
+    Properties:
+     VpcId: !Ref VPC
+     InternetGatewayId: !Ref IGW
+
+  ec2Route:
+    Type: "AWS::EC2::RouteTable"
+    DependsOn:
+      - VPC
+      - AttachGateway
+    Properties:
+      VpcId: !Ref VPC
+
+  routeOut:
+    Type: "AWS::EC2::Route"
+    DependsOn:
+      - ec2Route
+      - AttachGateway
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref IGW
+      RouteTableId: !Ref ec2Route
+
+  SubnetRouteAssociate:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    DependsOn:
+      - ec2Route
+      - subnet
+    Properties:
+      RouteTableId: !Ref ec2Route
+      SubnetId: !Ref subnet
+
+  Cloud9:
+    Type: "AWS::Cloud9::EnvironmentEC2"
+    Properties:
+      InstanceType: t2.micro
+      SubnetId: !Ref subnet
+      OwnerArn: !Ref LabUserId
+      Name: "Cloud9 Instance"
+
+  LambdaProducts:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Lambda Function For Products
+      FunctionName: get_all_products
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaRole.Arn
+      Runtime: python3.8
+      Code:
+        ZipFile: |
+          import boto3, json
+          from boto3.dynamodb.conditions import Key
+          from boto3.dynamodb.conditions import Key, Attr, Not
+
+          TABLE_NAME_STR = 'FoodProducts'
+          INDEX_NAME_STR = 'special_GSI'
+          DDB = boto3.resource('dynamodb', region_name='us-east-1')
+
+          def lambda_handler(event, context):
+
+              offer_path_str = event.get('path')
+              if offer_path_str is not None:
+                  return scan_index(event, context)
+              else:
+                  pass
+              print("running scan on table")
+
+              DDB = boto3.resource('dynamodb', region_name='us-east-1')
+
+              TABLE = DDB.Table(TABLE_NAME_STR)
+
+              response = TABLE.scan()
+
+              data = response['Items']
+
+
+
+              while 'LastEvaluatedKey' in response:
+                  response = TABLE.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+                  print("We needed to paginate and extend the response")
+                  data.extend(response['Items'])
+
+              #python return non standard JSON
+              #so we need a helper to convet Decimal('595') and special returned by dynamo
+              #to an integer like 595
+              for item in data:
+                 item['price_in_cents_int'] = item.pop('price_in_cents')
+                 if item.get('special') is not None:
+                   item['special_int'] = item.pop('special')
+                 item['tag_str_arr'] = item.pop('tags')
+                 item['description_str'] = item.pop('description')
+                 item['product_name_str'] = item.pop('product_name')
+                 item['product_id_str'] = item.pop('product_id')
+
+                 if item['price_in_cents_int']:
+                      item['price_in_cents_int'] = int(item['price_in_cents_int'])
+                 if item.get('special_int') is not None:
+                      item['special_int'] = int(item['special_int'])
+
+              return_me={"product_item_arr": data}
+
+              return return_me
+
+          def scan_index(event, context):
+
+              print("running scan on index")
+              ## event and context not used
+              TABLE = DDB.Table(TABLE_NAME_STR)
+
+
+              response = TABLE.scan(
+                  IndexName=INDEX_NAME_STR,
+                  FilterExpression=Not(Attr("tags").contains("out of stock"))
+              )
+
+              data = response['Items']
+
+              while 'LastEvaluatedKey' in response:
+                  response = TABLE.scan(
+                      ExclusiveStartKey=response['LastEvaluatedKey'],
+                      IndexName=INDEX_NAME_STR,
+                      FilterExpression=Not(Attr("tags").contains("out of stock"))
+                  )
+                  print("We needed to paginate and extend the response")
+                  data.extend(response['Items'])
+
+              #python return non standard JSON
+              #so we need a helper to convet Decimal('595') and special returned by dynamo
+              #to an integer like 595
+              for item in data:
+                 item['price_in_cents_int'] = item.pop('price_in_cents')
+                 item['special_int'] = item.pop('special')
+                 item['tag_str_arr'] = item.pop('tags')
+                 item['description_str'] = item.pop('description')
+                 item['product_name_str'] = item.pop('product_name')
+                 item['product_id_str'] = item.pop('product_id')
+
+                 if item['price_in_cents_int']:
+                      item['price_in_cents_int'] = int(item['price_in_cents_int'])
+                 if item.get('special_int') is not None:
+                      item['special_int'] = int(item['special_int'])
+
+              return_me = {
+                  "product_item_arr": data
+              }
+              return return_me
+
+
+          #remove this line below once you have tested locally and wish to deploy
+          #print(lambda_handler({}, None))
+
+
+
+  BuildingLabLambda:
+    Type: "AWS::IAM::ManagedPolicy"
+    Properties:
+      ManagedPolicyName: "Lambda-Policy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action:
+              - "dynamodb:*"
+              - "cloudwatch:*"
+              - "lambda:*"
+              - "logs:*"
+            Resource: "*"
+
+
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - !Ref BuildingLabLambda
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+            - apigateway.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      RoleName: lab7-lambda-role
+
+  MyRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: "cafe/node-web-app"
+      RepositoryPolicyText:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Sid: AllowPushPull
+            Effect: Allow
+            Principal:
+              AWS:
+                - "*"
+            Action:
+              - "ecr:*"
+
+  BeanstalkInstancePolicy:
+    Type: "AWS::IAM::ManagedPolicy"
+    Properties:
+      ManagedPolicyName: "aws-elasticbeanstalk-ec2-instance-policy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement: [
+            {
+              "Sid": "AllowEbAuth",
+              "Effect": "Allow",
+              "Action": [
+                ecr:GetAuthorizationToken
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "AllowPull",
+                "Effect": "Allow",
+                "Action": [
+                  ecr:GetDownloadUrlForLayer,
+                  ecr:BatchGetImage,
+                  ecr:BatchCheckLayerAvailability],
+                "Resource": "*"
+              },
+              {
+                  "Effect": "Allow",
+                  "Action": [
+                    elasticbeanstalk:Put*
+                  ],
+                  "Resource": "*"
+                }
+          ]
+
+  BeanstalkInstanceRole:
+    Type: AWS::IAM::Role
+    DependsOn:
+      - BeanstalkInstancePolicy
+    Properties:
+      ManagedPolicyArns:
+        - !Ref BeanstalkInstancePolicy
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+            - sts:AssumeRole
+      Path: "/"
+      RoleName: aws-elasticbeanstalk-ec2-role
+
+
+  BeanstalkInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    DependsOn:
+      - BeanstalkInstanceRole
+    Properties:
+      InstanceProfileName: "aws-elasticbeanstalk-ec2-role"
+      Path: "/"
+      Roles:
+        - "aws-elasticbeanstalk-ec2-role"
+
+
+Outputs:
+  WebsiteURL:
+    Value: !GetAtt
+      - S3Bucket
+      - WebsiteURL
+    Description: URL for Cafe website hosted on S3
