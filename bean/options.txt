@@ -23,7 +23,7 @@
     {
         "Namespace": "aws:elasticbeanstalk:application:environment",
         "OptionName": "APP_DB_HOST",
-        "Value": "supplierdb2.cluster-ckmdjsdfma5r.us-east-1.rds.amazonaws.com"
+        "Value": "supplierdb.cluster-ckmdjsdfma5r.us-east-1.rds.amazonaws.com"
     }
 ]
 
